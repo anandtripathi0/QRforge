@@ -1,0 +1,22 @@
+import QRCode from "qrcode";
+import {Design,frames,designSchema} from "./design";
+const esc=(s:string)=>s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&apos;"}[c]!));
+const rect=(x:number,y:number,w:number,h:number,fill:string,r=0)=>'<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" rx="'+r+'" fill="'+fill+'"/>';
+export function renderQR(payload:string,input:Design){const d=designSchema.parse(input);const qr=QRCode.create(payload,{errorCorrectionLevel:d.logo?"H":d.correction});const n=qr.modules.size,frame=frames.find(x=>x.id===d.frame)||frames[0],hasFrame=frame.style!=="none";
+const total=512,pad=hasFrame?d.framePadding:0,labelH=hasFrame?Math.max(45,d.fontSize+22)+d.spacing:0,area=total-2*pad-labelH,scale=area/(n+2*d.margin),startX=(total-area)/2+d.margin*scale,startY=pad+d.margin*scale;
+const fill=d.gradient?"url(#ink)":d.foreground;
+let s='<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="'+d.size+'" height="'+d.size+'" viewBox="0 0 512 512"><defs><linearGradient id="ink" x1="0" x2="1" y1="0" y2="0" gradientTransform="rotate('+d.angle+' .5 .5)"><stop stop-color="'+d.foreground+'"/><stop offset="1" stop-color="'+d.gradientColor+'"/></linearGradient></defs>';
+if(hasFrame){s+=rect(0,0,512,512,d.frameBackground,d.frameRadius);if(frame.style!=="minimal")s+='<rect x="'+d.frameBorder/2+'" y="'+d.frameBorder/2+'" width="'+(512-d.frameBorder)+'" height="'+(512-d.frameBorder)+'" rx="'+d.frameRadius+'" fill="none" stroke="'+d.frameColor+'" stroke-width="'+d.frameBorder+'"/>';}
+if(!d.transparent)s+=rect((total-area)/2,pad,area,area,d.background);
+const finder=(x:number,y:number)=>((x<7&&y<7)||(x>=n-7&&y<7)||(x<7&&y>=n-7));
+for(let y=0;y<n;y++)for(let x=0;x<n;x++){if(!qr.modules.get(y,x)||finder(x,y))continue;const px=startX+x*scale,py=startY+y*scale;const pattern=qr.modules.isReserved(y,x)?"Square":d.pattern;const r=pattern==="Dots"?scale/2:pattern==="Extra Rounded"?scale*.4:pattern.includes("Rounded")?scale*.25:0;if(pattern==="Dots")s+='<circle cx="'+(px+scale/2)+'" cy="'+(py+scale/2)+'" r="'+scale*.46+'" fill="'+fill+'"/>';else if(pattern==="Classy")s+='<path d="M'+px+' '+py+'h'+scale+'v'+scale+'h-'+scale*.7+'q-'+scale*.3+' 0 -'+scale*.3+' -'+scale*.3+'Z" fill="'+fill+'"/>';else s+=rect(px,py,scale+.015,scale+.015,fill,r);}
+for(const [x,y] of [[0,0],[n-7,0],[0,n-7]]){const px=startX+x*scale,py=startY+y*scale,r=d.corner==="Dots"?3.5*scale:d.corner==="Rounded"?1.5*scale:0;
+const outer=7*scale,inner=5*scale,ir=Math.max(0,r-scale);
+// Even-odd cutout keeps transparent backgrounds truly transparent.
+s+='<path fill="'+d.eyeColor+'" fill-rule="evenodd" d="M'+(px+r)+' '+py+'h'+(outer-2*r)+'q'+r+' 0 '+r+' '+r+'v'+(outer-2*r)+'q0 '+r+' -'+r+' '+r+'h-'+(outer-2*r)+'q-'+r+' 0 -'+r+' -'+r+'v-'+(outer-2*r)+'q0 -'+r+' '+r+' -'+r+'Z M'+(px+scale+ir)+' '+(py+scale)+'h'+(inner-2*ir)+'q'+ir+' 0 '+ir+' '+ir+'v'+(inner-2*ir)+'q0 '+ir+' -'+ir+' '+ir+'h-'+(inner-2*ir)+'q-'+ir+' 0 -'+ir+' -'+ir+'v-'+(inner-2*ir)+'q0 -'+ir+' '+ir+' -'+ir+'Z"/>';
+s+=rect(px+2*scale,py+2*scale,3*scale,3*scale,d.eyeColor,d.eye==="Dots"?1.5*scale:d.eye==="Rounded"?.7*scale:0);}
+if(d.logo){const width=area*d.logoSize/100,x=(512-width)/2,y=pad+(area-width)/2,p=d.logoPadding;const r=d.logoRounded?width*.18:0;if(d.logoPlate)s+=rect(x-p,y-p,width+2*p,width+2*p,d.background,r);s+='<defs><clipPath id="logo-clip">'+rect(x,y,width,width,"white",r)+'</clipPath></defs><image href="'+d.logo+'" x="'+x+'" y="'+y+'" width="'+width+'" height="'+width+'" clip-path="url(#logo-clip)" preserveAspectRatio="xMidYMid meet"/>';}
+if(hasFrame){const y=pad+area+d.spacing,barH=512-y-pad;const plain=frame.style==="minimal"||frame.style==="simple";if(!plain)s+=rect(pad,y,512-2*pad,barH,d.frameColor,frame.style==="badge"?barH/2:frame.style==="rounded"?12:frame.style==="ticket"?3:6);if(frame.style==="poster")s+=rect(pad,Math.max(4,pad-8),512-2*pad,4,d.frameColor,2);if(frame.style==="modern")s+=rect(2,pad,6,area,d.frameColor,2);const prefix=d.icon==="arrow"?"↗ ":d.icon==="heart"?"♥ ":d.icon==="scan"?"▣ ":"";const text=prefix+d.frameText;const font=Math.min(d.fontSize,(512-2*pad-16)/Math.max(text.length*.65,1));s+='<text x="256" y="'+(y+barH/2)+'" dominant-baseline="central" text-anchor="middle" font-family="Arial, sans-serif" font-size="'+font+'" font-weight="'+d.fontWeight+'" fill="'+(plain?d.frameColor:d.textColor)+'">'+esc(text)+'</text>';}
+return {svg:s+"</svg>",modules:n};
+}
+export const svgURL=(s:string)=>"data:image/svg+xml;charset=utf-8,"+encodeURIComponent(s);

@@ -1,0 +1,25 @@
+/* Generated local data images must bypass remote image optimization. */
+/* eslint-disable @next/next/no-img-element */
+"use client";
+import {useEffect,useCallback,useState} from "react";
+import {Download,ShieldCheck,Copy,Share2,Printer,Bookmark,Save} from "lucide-react";
+import {Design,quality} from "@/lib/qr/design";
+import {svgURL} from "@/lib/qr/render";
+import {exportBlob,downloadBlob,filename,copyText,Format,raster} from "@/lib/export";
+import {Choice} from "./controls";
+import {toast} from "sonner";
+export default function Preview({svg,modules,design:d,setDesign,payload,name,save,busy}:{svg:string;modules:number;design:Design;setDesign:(d:Design)=>void;payload:string;name:string;save:(template:boolean)=>Promise<void>;busy:boolean}){
+const [format,setFormat]=useState<Format>("PNG"),[working,setWorking]=useState(false);
+const q=quality(d,modules);
+const download=useCallback(async()=>{if(!svg||busy)return;setWorking(true);try{downloadBlob(await exportBlob(svg,d.size,format),filename(name,format));toast.success("QR downloaded")}catch(e){toast.error((e as Error).message)}finally{setWorking(false)}},[svg,busy,d.size,format,name]);
+useEffect(()=>{const listener=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key==="s"){e.preventDefault();void download()}};window.addEventListener("keydown",listener);return ()=>window.removeEventListener("keydown",listener)},[download]);
+async function action(fn:()=>Promise<void>){try{await fn()}catch(e){toast.error((e as Error).message)}}
+async function share(){const file=new File([await raster(svg,d.size)],filename(name,"png"),{type:"image/png"});if(navigator.canShare?.({files:[file]}))await navigator.share({files:[file],title:name||"QRForge code"});else{await copyText(payload);toast.success("Sharing unavailable; encoded content copied")}}
+function print(){const img=new Image();img.src=svgURL(svg);img.alt="QR code";const box=document.createElement("div");box.id="print-qr";box.appendChild(img);document.body.appendChild(box);img.onload=()=>{window.print();setTimeout(()=>box.remove(),1000)};img.onerror=()=>{box.remove();toast.error("Could not prepare print.")}}
+return <section className="panel preview-panel"><div className="section-title"><span className="step">3</span><h2>Ready for the world</h2><span className="live">Live preview</span></div><div className="preview-stage" aria-busy={busy}>{svg?<div className="preview-paper"><img src={svgURL(svg)} alt={"QR code for "+(name||"your content")}/></div>:<div className="preview-empty"><ShieldCheck size={32}/><p>{busy?"Creating your code…":"Your code appears here"}</p><span>Add valid content to get started.</span></div>}</div>
+<div className={"quality "+(q.label==="Risky"?"risky":"")}><ShieldCheck size={17}/><b>{svg?q.label+" design":"Awaiting content"}</b><span>Estimated scan quality</span></div>{svg&&<details className="quality-details"><summary>Scan guidance · {q.contrast.toFixed(1)}:1 contrast</summary><p>This is guidance, not a scan guarantee. Test the final export on your target devices.</p>{q.warnings.map(w=><p key={w}>{w}</p>)}</details>}
+<div className="export-row"><label>File format<Choice value={format} onChange={v=>setFormat(v as Format)} items={["PNG","JPG","WEBP","SVG","PDF"]} label="File format"/></label><label>Image size<Choice value={[512,1024,2048].includes(d.size)?String(d.size):"custom"} onChange={v=>setDesign({...d,size:v==="custom"?1536:+v})} items={[{value:"512",label:"512 × 512"},{value:"1024",label:"1024 × 1024"},{value:"2048",label:"2048 × 2048"},{value:"custom",label:"Custom size"}]} label="Image size"/></label></div>{![512,1024,2048].includes(d.size)&&<label className="field">Custom size (256–4096 px)<input type="number" min={256} max={4096} value={d.size} onChange={e=>setDesign({...d,size:Math.min(4096,Math.max(256,Math.round(+e.target.value)||256))})}/></label>}
+<button className="primary download" disabled={!svg||busy||working} onClick={()=>void download()}><Download size={18}/>{working?"Preparing download…":"Download QR code"}</button><p className="export-note">High quality. No watermarks. Always yours.</p>
+<div className="preview-actions"><button disabled={!svg||busy} title="Copy QR image" onClick={()=>void action(async()=>{await navigator.clipboard.write([new ClipboardItem({"image/png":await raster(svg,d.size)})]);toast.success("QR image copied")})}><Copy size={16}/>Image</button><button disabled={!svg||busy} onClick={()=>void action(async()=>{await copyText(svg);toast.success("SVG copied")})}>SVG</button><button disabled={!svg||busy} onClick={()=>void action(async()=>{await copyText(payload);toast.success("Content copied")})}>Content</button><button disabled={!svg||busy} onClick={()=>void action(share)}><Share2 size={16}/>Share</button><button disabled={!svg||busy} onClick={print}><Printer size={16}/>Print</button></div><div className="save-actions"><button className="secondary" disabled={!svg||busy} onClick={()=>void action(()=>save(false))}><Save size={15}/>Save to history</button><button className="secondary" disabled={!svg||busy} onClick={()=>void action(()=>save(true))}><Bookmark size={15}/>Template</button></div>
+</section>
+}
